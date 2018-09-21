@@ -12,10 +12,10 @@ using namespace eosio;
 using std::string;
 using eosio::const_mem_fun;
 
-class ednatoken : public contract
+class gosharetoken : public contract
 {
   public:
-    ednatoken(account_name self) : contract(self) {}
+    gosharetoken(account_name self) : contract(self) {}
 
     // @abi action
     void create(account_name issuer, asset maximum_supply);
@@ -24,7 +24,19 @@ class ednatoken : public contract
     void issue(account_name to, asset quantity, string memo);
 
     // @abi action
+    void issuefree( account_name to, asset quantity, string memo ); // Adrian (From Poorman contract)
+
+    // @abi action
+    void burn( account_name from, asset quantity, string memo ); // Adrian (From Poorman contract)
+
+    // @abi action
+    void signup( account_name owner, asset quantity); // Adrian (From Poorman contract)
+
+    // @abi action
     void transfer(account_name from, account_name to, asset quantity, string memo);
+
+    // @abi action
+    void transferfree( account_name from, account_name to, asset quantity, string memo ); // Adrian (From Poorman contract)
 
     // @abi action
     void setoverflow (account_name _overflow);
@@ -71,9 +83,9 @@ class ednatoken : public contract
     const uint8_t   MONTHLY = 2;
     const uint8_t   QUARTERLY = 3;
 
-//    const uint32_t  WEEK_WAIT =    (60 * 3);   // TESTING Speed Only
-//    const uint32_t  MONTH_WAIT =   (60 * 12);  // TESTING Speed Only
-//    const uint32_t  QUARTER_WAIT = (60 * 36);  // TESTING Speed Only
+    // const uint32_t  WEEK_WAIT =    (60 * 3);   // TESTING Speed Only
+    // const uint32_t  MONTH_WAIT =   (60 * 12);  // TESTING Speed Only
+    // const uint32_t  QUARTER_WAIT = (60 * 36);  // TESTING Speed Only
 
     const uint32_t   WEEK_WAIT =    (60 * 60 * 24 * 7);
     const uint32_t   MONTH_WAIT =   (60 * 60 * 24 * 7 * 4);
@@ -113,8 +125,7 @@ class ednatoken : public contract
     typedef eosio::multi_index<N(configs), config> config_table;
 
     // @abi table accounts i64
-    struct account
-    {
+    struct account {
         asset balance;
         uint64_t primary_key() const { return balance.symbol.name(); }
 
@@ -138,8 +149,7 @@ class ednatoken : public contract
    typedef eosio::multi_index<N(stakes), stake_row> stake_table;
 
     // @abi table stat i64
-    struct currencystat
-    {
+    struct currencystat {
         asset supply;
         asset max_supply;
         account_name issuer;
@@ -153,14 +163,19 @@ class ednatoken : public contract
     typedef eosio::multi_index<N(stat), currencystat> stats;
 
     void sub_balance(account_name owner, asset value);
-    void add_balance(account_name owner, asset value, account_name ram_payer);
+    //void add_balance(account_name owner, asset value, account_name ram_payer);
+    // Adrian (): From poorman token. It adds the pay_ram field
+    void add_balance( account_name owner, asset value, account_name ram_payer, bool pay_ram = true );
+
+    // Adrian (): From poorman token
+    void do_issue(account_name to, asset quantity, string memom, bool pay_ram = true);
+    void do_transfer(account_name from, account_name to, asset quantity, string memo, bool pay_ram = true);
 
     void sub_stake(account_name owner, asset value);
     void add_stake(account_name owner, asset value);
 
   public:
-    struct transfer_args
-    {
+    struct transfer_args {
         account_name from;
         account_name to;
         asset quantity;
@@ -169,7 +184,7 @@ class ednatoken : public contract
 };
 
 
-asset ednatoken::get_supply(symbol_name sym) const
+asset gosharetoken::get_supply(symbol_name sym) const
 {
     stats statstable(_self, sym);
     const auto &st = statstable.get(sym);
@@ -177,11 +192,11 @@ asset ednatoken::get_supply(symbol_name sym) const
 }
 
 
-asset ednatoken::get_balance(account_name owner, symbol_name sym) const
+asset gosharetoken::get_balance(account_name owner, symbol_name sym) const
 {
     accounts accountstable(_self, owner);
     const auto &ac = accountstable.get(sym);
     return ac.balance;
 }
 
-EOSIO_ABI( ednatoken,(create)(issue)(transfer)(setoverflow)(running)(stake)(claim)(unstake)(checkrun)(addbonus)(rembonus)(runpayout)(initstats))
+EOSIO_ABI(gosharetoken,(create)(issue)(transfer)(setoverflow)(running)(stake)(claim)(unstake)(checkrun)(addbonus)(rembonus)(runpayout)(initstats))

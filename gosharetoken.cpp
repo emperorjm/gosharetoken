@@ -3,10 +3,10 @@
  *  @copyright defined in eos/LICENSE.txt
 */
 
-#include "ednatoken.hpp"
+#include "gosharetoken.hpp"
 #include <math.h>
 
-void ednatoken::create(account_name issuer, asset maximum_supply)
+void gosharetoken::create(account_name issuer, asset maximum_supply)
 {
     require_auth(_self);
 
@@ -26,7 +26,22 @@ void ednatoken::create(account_name issuer, asset maximum_supply)
     });
 }
 
-void ednatoken::issue(account_name to, asset quantity, string memo)
+void gosharetoken::issue(account_name to, asset quantity, string memo)
+{
+    // Adrian (): From Poorman Token
+    do_issue(to, quantity, memo, true);
+}
+
+// Adrian (): From Poorman Token
+void token::issuefree(account_name to, asset quantity, string memo)
+{
+    do_issue(to, quantity, memo, false);
+}
+
+/**
+ * Adrian (): Similar setup to the poorman token
+ */
+void gosharetoken::do_issue(account_name to, asset quantity, string memo, bool pay_ram = true)
 {
     auto sym = quantity.symbol;
     eosio_assert(sym.is_valid(), "invalid symbol name");
@@ -40,6 +55,7 @@ void ednatoken::issue(account_name to, asset quantity, string memo)
 
     require_auth(st.issuer);
     eosio_assert(quantity.is_valid(), "invalid quantity");
+    // Adrian (): Poorman token uses '>='
     eosio_assert(quantity.amount > 0, "must issue positive quantity");
 
     eosio_assert(quantity.symbol == st.supply.symbol, "symbol precision mismatch");
@@ -51,13 +67,89 @@ void ednatoken::issue(account_name to, asset quantity, string memo)
 
     add_balance(st.issuer, quantity, st.issuer);
 
-    if (to != st.issuer)
-    {
-        SEND_INLINE_ACTION(*this, transfer, {st.issuer, N(active)}, {st.issuer, to, quantity, memo});
+    if (to != st.issuer) {
+        // Adrian (): The RAM check comes from Poorman Token
+        if(pay_ram == true) {
+            SEND_INLINE_ACTION(*this, transfer, {st.issuer, N(active)}, {st.issuer, to, quantity, memo});
+        } else {
+            SEND_INLINE_ACTION(*this, transferfree, {st.issuer, N(active)}, {st.issuer, to, quantity, memo});
+        }
     }
 }
 
-void ednatoken::transfer(account_name from, account_name to, asset quantity, string memo)
+// Adrian (): From Poorman Token
+void token::burn(account_name from, asset quantity, string memo)
+{
+    auto sym = quantity.symbol;
+    eosio_assert(sym.is_valid(), "invalid symbol name");
+    eosio_assert(memo.size() <= 256, "memo has more than 256 bytes");
+
+    auto sym_name = sym.name();
+    stats statstable(_self, sym_name);
+    auto existing = statstable.find(sym_name);
+    eosio_assert(existing != statstable.end(), "token with symbol does not exist, create token before burn");
+    const auto& st = *existing;
+
+    require_auth(from);
+    require_recipient(from);
+    eosio_assert(quantity.is_valid(), "invalid quantity");
+    eosio_assert(quantity.amount >= 0, "must burn positive or zero quantity");
+
+    eosio_assert(quantity.symbol == st.supply.symbol, "symbol precision mismatch");
+    eosio_assert(quantity.amount <= st.supply.amount, "quantity exceeds available supply");
+
+    statstable.modify(st, 0, [&]( auto& s) {
+       s.supply -= quantity;
+    });
+
+    sub_balance(from, quantity);
+}
+
+// Adrian (): From Poorman Token
+void token::signup(account_name owner, asset quantity)
+{
+    auto sym = quantity.symbol;
+    eosio_assert(sym.is_valid(), "invalid symbol name");
+
+    auto sym_name = sym.name();
+    stats statstable(_self, sym_name);
+    auto existing = statstable.find(sym_name);
+    eosio_assert(existing != statstable.end(), "token with symbol does not exist, create token before signup");
+    const auto& st = *existing;
+
+    require_auth(owner);
+    require_recipient(owner);
+
+    accounts to_acnts(_self, owner);
+    auto to = to_acnts.find(sym_name);
+    eosio_assert(to == to_acnts.end() , "you have already signed up");
+
+    eosio_assert(quantity.is_valid(), "invalid quantity");
+    eosio_assert(quantity.amount == 0, "quantity exceeds signup allowance");
+    eosio_assert(quantity.symbol == st.supply.symbol, "symbol precision mismatch");
+    eosio_assert(quantity.amount <= st.max_supply.amount - st.supply.amount, "quantity exceeds available supply");
+
+    statstable.modify(st, 0, [&]( auto& s) {
+       s.supply += quantity;
+    });
+
+    add_balance(owner, quantity, owner);
+}
+
+void gosharetoken::transfer(account_name from, account_name to, asset quantity, string memo)
+{
+    // Adrian (): From Poorman Token
+    do_transfer(from, to, quantity, memo, true);
+}
+
+// Adrian (): From Poorman Token
+void token::transferfree(account_name from, account_name to, asset quantity, string memo)
+{
+    do_transfer(from, to, quantity, memo, false);
+}
+
+// Adrian (): Name change from Poorman Token
+void gosharetoken::do_transfer(account_name from, account_name to, asset quantity, string memo, bool pay_ram = true)
 {
     eosio_assert(from != to, "cannot transfer to self");
     require_auth(from);
@@ -75,11 +167,11 @@ void ednatoken::transfer(account_name from, account_name to, asset quantity, str
     eosio_assert(memo.size() <= 256, "memo has more than 256 bytes");
 
     sub_balance(from, quantity);
-    add_balance(to, quantity, from);
+    add_balance(to, quantity, from, pay_ram);
 }
 
 
-void ednatoken::setoverflow(account_name _overflow)
+void gosharetoken::setoverflow(account_name _overflow)
 {
     require_auth(_self);
     config_table c_t(_self, _self);
@@ -97,7 +189,7 @@ void ednatoken::setoverflow(account_name _overflow)
 }
 
 
-void ednatoken::running(uint8_t on_switch){
+void gosharetoken::running(uint8_t on_switch){
     require_auth (_self);
     config_table c_t (_self, _self);
     auto c_itr = c_t.find(0);
@@ -113,7 +205,7 @@ void ednatoken::running(uint8_t on_switch){
 }
 
 
-void ednatoken::stake(account_name _stake_account, uint8_t _stake_period, asset _staked)
+void gosharetoken::stake(account_name _stake_account, uint8_t _stake_period, asset _staked)
 {
     require_auth(_stake_account);
     config_table c_t (_self, _self);
@@ -169,21 +261,21 @@ void ednatoken::stake(account_name _stake_account, uint8_t _stake_period, asset 
 }
 
 
-void ednatoken::claim(account_name _stake_account){
+void gosharetoken::claim(account_name _stake_account){
 
     uint64_t total_shares;
     asset total_payout;
     asset pay_per_share;
     asset my_shares;
     asset payout;
-    asset add_weekly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};                // Variables used to keep the config table in sync
-    asset add_monthly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset add_quarterly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset add_escrow_monthly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset rem_escrow_monthly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset add_escrow_quarterly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset rem_escrow_quarterly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-    asset rem_unclaimed = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
+    asset add_weekly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};                // Variables used to keep the config table in sync
+    asset add_monthly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset add_quarterly = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset add_escrow_monthly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset rem_escrow_monthly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset add_escrow_quarterly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset rem_escrow_quarterly =  asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+    asset rem_unclaimed = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
 
     config_table c_t(_self, _self);
     auto c_itr = c_t.find(0);
@@ -202,7 +294,7 @@ void ednatoken::claim(account_name _stake_account){
             if (itr->stake_period == WEEKLY)
             {
                 my_shares = ((WEEK_MULTIPLIERX100 * itr->staked)/100);                // calc payout
-                payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "EDNA")};
+                payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "GOS")};
                 //print("myShares: ", my_shares, " pay_per_share: ", pay_per_share, " payout: ", payout, "\n" );
                 s.staked += payout;                                             // increases existing stake
                 add_weekly += payout;                                           // add to the config table weekly staked
@@ -214,7 +306,7 @@ void ednatoken::claim(account_name _stake_account){
             else if (itr->stake_period == MONTHLY)
             {
               my_shares = ((MONTH_MULTIPLIERX100 * itr->staked)/100);                // calc payout
-              payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "EDNA")};
+              payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "GOS")};
               //print("myShares: ", my_shares, " pay_per_share: ", pay_per_share, " payout: ", payout, "\n" );
               if (itr->stake_date  <= now()) {                                  //if the stake_date has expired...payout this weeks funds + add_escrow advance both dates
                 rem_unclaimed += payout;                                        // decrement payout from pool
@@ -238,7 +330,7 @@ void ednatoken::claim(account_name _stake_account){
             else if (itr->stake_period == QUARTERLY)
             {
               my_shares = ((QUARTER_MULTIPLIERX100 * itr->staked)/100);         // calc payout
-              payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "EDNA")};
+              payout = asset{static_cast<int64_t>((my_shares.amount * pay_per_share.amount)/10000),string_to_symbol(4, "GOS")};
               //print("myShares: ", my_shares, " pay_per_share: ", pay_per_share, " payout: ", payout, "\n" );
               if (itr->stake_date  <= now()) {                                  //if the stake_date has expired...payout this weeks funds + add_escrow advance both dates
                 rem_unclaimed += payout;                                        // decrement payout from pool
@@ -273,7 +365,7 @@ void ednatoken::claim(account_name _stake_account){
 }
 
 
-void ednatoken::unstake(account_name _stake_account)
+void gosharetoken::unstake(account_name _stake_account)
 {
     stake_table s_t(_self, _self);
     auto itr = s_t.find(_stake_account);
@@ -305,7 +397,7 @@ void ednatoken::unstake(account_name _stake_account)
 }
 
 
-void ednatoken::checkrun()
+void gosharetoken::checkrun()
 {
     require_auth(_self);
     config_table c_t(_self, _self);
@@ -314,7 +406,7 @@ void ednatoken::checkrun()
     uint64_t total_shares = 0;
     auto supply = 1000000000;
     auto total_stake = (c_itr->total_staked.amount + c_itr->total_escrowed_monthly.amount + c_itr->total_escrowed_quarterly.amount);
-    asset print_staked = asset{static_cast<int64_t>(total_stake), string_to_symbol(4, "EDNA")};
+    asset print_staked = asset{static_cast<int64_t>(total_stake), string_to_symbol(4, "GOS")};
     total_shares = (WEEK_MULTIPLIERX100 * c_itr->staked_weekly.amount);
     total_shares += (MONTH_MULTIPLIERX100 * c_itr->staked_monthly.amount);
     total_shares += (QUARTER_MULTIPLIERX100 * c_itr->staked_quarterly.amount);
@@ -323,10 +415,10 @@ void ednatoken::checkrun()
     total_shares /= 100;
     uint64_t perc_stakedx100 = (total_stake  * 1000000 / supply * 1000000);
     uint64_t weekly_base = (BASE_WEEKLY * 1000000);
-    asset base_payout = asset{static_cast<int64_t>((weekly_base / perc_stakedx100) /100), string_to_symbol(4, "EDNA")}; // TESTING ONLY change symbol to go-live
-    asset total_payout = asset{static_cast<int64_t>(base_payout.amount + c_itr->bonus.amount), string_to_symbol(4, "EDNA")}; // TESTING ONLY change symbol to go-live
+    asset base_payout = asset{static_cast<int64_t>((weekly_base / perc_stakedx100) /100), string_to_symbol(4, "GOS")}; // TESTING ONLY change symbol to go-live
+    asset total_payout = asset{static_cast<int64_t>(base_payout.amount + c_itr->bonus.amount), string_to_symbol(4, "GOS")}; // TESTING ONLY change symbol to go-live
     auto my_pps = (total_payout.amount*10000/total_shares*10000);
-    asset pay_per_share = asset{static_cast<int64_t>(my_pps/10000), string_to_symbol(4, "EDNA")}; // TESTING ONLY change symbol to go-live
+    asset pay_per_share = asset{static_cast<int64_t>(my_pps/10000), string_to_symbol(4, "GOS")}; // TESTING ONLY change symbol to go-live
 
     if (total_payout.amount == 0 || total_stake == 0)
     {
@@ -342,7 +434,7 @@ void ednatoken::checkrun()
 }
 
 
-void ednatoken::addbonus(account_name _sender, asset _bonus)
+void gosharetoken::addbonus(account_name _sender, asset _bonus)
 {
     require_auth(_sender);
     config_table c_t(_self, _self);
@@ -363,7 +455,7 @@ void ednatoken::addbonus(account_name _sender, asset _bonus)
 }
 
 
-void ednatoken::rembonus()
+void gosharetoken::rembonus()
 {
   require_auth(_self);
   config_table c_t(_self, _self);
@@ -376,9 +468,9 @@ void ednatoken::rembonus()
 }
 
 
-void ednatoken::runpayout()
+void gosharetoken::runpayout()
 {
-    ednatoken::running(0);                                                      //lock the staking and addbonus functions
+    gosharetoken::running(0);                                                      //lock the staking and addbonus functions
     require_auth(_self);
     config_table c_t(_self, _self);
     auto c_itr = c_t.find(0);
@@ -393,7 +485,7 @@ void ednatoken::runpayout()
     uint64_t total_shares = 0;
     auto supply = 1000000000;
     auto total_stake = (c_itr->total_staked.amount + c_itr->total_escrowed_monthly.amount + c_itr->total_escrowed_quarterly.amount);
-    asset print_staked = asset{static_cast<int64_t>(total_stake), string_to_symbol(4, "EDNA")};
+    asset print_staked = asset{static_cast<int64_t>(total_stake), string_to_symbol(4, "GOS")};
     total_shares = (WEEK_MULTIPLIERX100 * c_itr->staked_weekly.amount);
     total_shares += (MONTH_MULTIPLIERX100 * c_itr->staked_monthly.amount);
     total_shares += (QUARTER_MULTIPLIERX100 * c_itr->staked_quarterly.amount);
@@ -402,10 +494,10 @@ void ednatoken::runpayout()
     total_shares /= 100;
     uint64_t perc_stakedx100 = (total_stake  * 1000000 / supply * 1000000);
     uint64_t weekly_base = (BASE_WEEKLY * 1000000);
-    asset base_payout = asset{static_cast<int64_t>((weekly_base / perc_stakedx100) /100), string_to_symbol(4, "EDNA")};
-    asset total_payout = asset{static_cast<int64_t>(base_payout.amount + c_itr->bonus.amount), string_to_symbol(4, "EDNA")};
+    asset base_payout = asset{static_cast<int64_t>((weekly_base / perc_stakedx100) /100), string_to_symbol(4, "GOS")};
+    asset total_payout = asset{static_cast<int64_t>(base_payout.amount + c_itr->bonus.amount), string_to_symbol(4, "GOS")};
     auto my_pps = (total_payout.amount*10000/total_shares*10000);
-    asset pay_per_share = asset{static_cast<int64_t>(my_pps/10000), string_to_symbol(4, "EDNA")};
+    asset pay_per_share = asset{static_cast<int64_t>(my_pps/10000), string_to_symbol(4, "GOS")};
     asset print_bonus = c_itr->bonus;
     auto unclaimed_tokens = total_payout;                                       // bonus set to zero below
     sub_balance(_self, unclaimed_tokens);                                       // remove the tokens from the account to the unclaimed pile
@@ -431,14 +523,14 @@ void ednatoken::runpayout()
       print("TEST RUN: " , "Total Staked & Escrowed: " , print_staked, " | " , "Total Payout: ", total_payout , " | ",
       "Bonus: ", c_itr->bonus , " | " , "Total Shares: " , total_shares/10000, " | " , "Pay/Share: "   , pay_per_share, "\n" );
     }
-    ednatoken::running(1);                                                      // unlock staking and add bonus
+    gosharetoken::running(1);                                                      // unlock staking and add bonus
 }
 
 
-void ednatoken::initstats(){
+void gosharetoken::initstats(){
   require_auth (_self);
-  asset returntokens = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
-  asset cleartokens = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "EDNA")};
+  asset returntokens = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
+  asset cleartokens = asset{static_cast<int64_t>(0.0000), string_to_symbol(4, "GOS")};
   config_table c_t (_self, _self);
   auto c_itr = c_t.find(0);
   c_t.modify(c_itr, _self, [&](auto &c) {
@@ -464,7 +556,7 @@ void ednatoken::initstats(){
 }
 
 
-void ednatoken::sub_balance(account_name owner, asset value)
+void gosharetoken::sub_balance(account_name owner, asset value)
 {
     accounts from_acnts(_self, owner);
     const auto &from = from_acnts.get(value.symbol.name(), "no balance object found");
@@ -479,21 +571,21 @@ void ednatoken::sub_balance(account_name owner, asset value)
         });
     }
 }
+
 /*
-*   Add ballance can be sent here by anyone
+* Add ballance can be sent here by anyone
+* Adrian (): Added the 'pay_ram' variable
 */
-void ednatoken::add_balance(account_name owner, asset value, account_name ram_payer)
+void gosharetoken::add_balance(account_name owner, asset value, account_name ram_payer, bool pay_ram = true)
 {
     accounts to_acnts(_self, owner);
     auto to = to_acnts.find(value.symbol.name());
-    if (to == to_acnts.end())
-    {
+    if (to == to_acnts.end()) {
+        eosio_assert(pay_ram == true, "destination account does not have balance");
         to_acnts.emplace(ram_payer, [&](auto &a) {
             a.balance = value;
         });
-    }
-    else
-    {
+    } else {
         to_acnts.modify(to, 0, [&](auto &a) {
             a.balance += value;
         });
