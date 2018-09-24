@@ -33,7 +33,7 @@ void gosharetoken::issue(account_name to, asset quantity, string memo)
 }
 
 // Adrian (): From Poorman Token
-void token::issuefree(account_name to, asset quantity, string memo)
+void gosharetoken::issuefree(account_name to, asset quantity, string memo)
 {
     do_issue(to, quantity, memo, false);
 }
@@ -65,7 +65,7 @@ void gosharetoken::do_issue(account_name to, asset quantity, string memo, bool p
         s.supply += quantity;
     });
 
-    add_balance(st.issuer, quantity, st.issuer);
+    add_balance(st.issuer, quantity, st.issuer, true); // Adrian
 
     if (to != st.issuer) {
         // Adrian (): The RAM check comes from Poorman Token
@@ -78,7 +78,7 @@ void gosharetoken::do_issue(account_name to, asset quantity, string memo, bool p
 }
 
 // Adrian (): From Poorman Token
-void token::burn(account_name from, asset quantity, string memo)
+void gosharetoken::burn(account_name from, asset quantity, string memo)
 {
     auto sym = quantity.symbol;
     eosio_assert(sym.is_valid(), "invalid symbol name");
@@ -106,7 +106,7 @@ void token::burn(account_name from, asset quantity, string memo)
 }
 
 // Adrian (): From Poorman Token
-void token::signup(account_name owner, asset quantity)
+void gosharetoken::signup(account_name owner, asset quantity)
 {
     auto sym = quantity.symbol;
     eosio_assert(sym.is_valid(), "invalid symbol name");
@@ -133,7 +133,7 @@ void token::signup(account_name owner, asset quantity)
        s.supply += quantity;
     });
 
-    add_balance(owner, quantity, owner);
+    add_balance(owner, quantity, owner, true); // Adrian
 }
 
 void gosharetoken::transfer(account_name from, account_name to, asset quantity, string memo)
@@ -143,7 +143,7 @@ void gosharetoken::transfer(account_name from, account_name to, asset quantity, 
 }
 
 // Adrian (): From Poorman Token
-void token::transferfree(account_name from, account_name to, asset quantity, string memo)
+void gosharetoken::transferfree(account_name from, account_name to, asset quantity, string memo)
 {
     do_transfer(from, to, quantity, memo, false);
 }
@@ -370,13 +370,14 @@ void gosharetoken::unstake(account_name _stake_account)
     stake_table s_t(_self, _self);
     auto itr = s_t.find(_stake_account);
     require_auth(itr->stake_account);
-    add_balance(itr->stake_account, itr->staked, itr->stake_account);
+    add_balance(itr->stake_account, itr->staked, itr->stake_account, true); // Adrian
 
     config_table c_t(_self, _self);
     auto c_itr = c_t.find(0);
     eosio_assert(c_itr->running != 0,"staking contract is currently disabled.");
     if (itr->escrow.amount > 0){
-      add_balance(_self, itr->escrow, _self);                                   // return the stored escrow - it was deducted from the contract during payout
+      // Adrian
+      add_balance(_self, itr->escrow, _self, true);                                   // return the stored escrow - it was deducted from the contract during payout
     }
     c_t.modify(c_itr, _self, [&](auto &c) {                                     // bookkeeping on the config table to keep the staked & esrowed amounts correct
     c.active_accounts -= 1;
@@ -477,7 +478,8 @@ void gosharetoken::runpayout()
 
     c_t.modify(c_itr, _self, [&](auto &c) {
     if (c.unclaimed_tokens.amount > 0){
-      add_balance(_self, c.unclaimed_tokens, _self);                            // Move unclaimed off the config table and return them to the account - zeroed below
+      // Adrian
+      add_balance(_self, c.unclaimed_tokens, _self, true);                            // Move unclaimed off the config table and return them to the account - zeroed below
       c.unclaimed_tokens -= c.unclaimed_tokens;
       }
     });

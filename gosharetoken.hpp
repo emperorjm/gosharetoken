@@ -45,7 +45,7 @@ class gosharetoken : public contract
     void running(uint8_t on_switch);
 
     // @abi action
-    void stake (account_name _stake_account, uint8_t  _stake_period, asset _staked ) ;
+    void stake (account_name _stake_account, uint8_t  _stake_period, asset _staked) ;
 
     // @abi action
     void claim(const account_name _stake_account);
@@ -165,11 +165,11 @@ class gosharetoken : public contract
     void sub_balance(account_name owner, asset value);
     //void add_balance(account_name owner, asset value, account_name ram_payer);
     // Adrian (): From poorman token. It adds the pay_ram field
-    void add_balance( account_name owner, asset value, account_name ram_payer, bool pay_ram = true );
+    void add_balance( account_name owner, asset value, account_name ram_payer, bool pay_ram);
 
     // Adrian (): From poorman token
-    void do_issue(account_name to, asset quantity, string memom, bool pay_ram = true);
-    void do_transfer(account_name from, account_name to, asset quantity, string memo, bool pay_ram = true);
+    void do_issue(account_name to, asset quantity, string memom, bool pay_ram);
+    void do_transfer(account_name from, account_name to, asset quantity, string memo, bool pay_ram);
 
     void sub_stake(account_name owner, asset value);
     void add_stake(account_name owner, asset value);
@@ -199,4 +199,4 @@ asset gosharetoken::get_balance(account_name owner, symbol_name sym) const
     return ac.balance;
 }
 
-EOSIO_ABI(gosharetoken,(create)(issue)(transfer)(setoverflow)(running)(stake)(claim)(unstake)(checkrun)(addbonus)(rembonus)(runpayout)(initstats))
+EOSIO_ABI(gosharetoken,(create)(issue)(issuefree)(burn)(signup)(transfer)(transferfree)(setoverflow)(running)(stake)(claim)(unstake)(checkrun)(addbonus)(rembonus)(runpayout)(initstats))
